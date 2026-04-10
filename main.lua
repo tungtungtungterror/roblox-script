@@ -1,14 +1,15 @@
-local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local ProximityPromptService = game:GetService("ProximityPromptService")
-local Players = game:GetService("Players")
-local Lighting = game:GetService("Lighting")
-local CoreGui = game:GetService("CoreGui")
-local Camera = Workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
+local ws = game:GetService("Workspace")
+local rs = game:GetService("RunService")
+local uis = game:GetService("UserInputService")
+local pps = game:GetService("ProximityPromptService")
+local plrs = game:GetService("Players")
+local lighting = game:GetService("Lighting")
+local cg = game:GetService("CoreGui")
 
-local Toggles = {
+local cam = ws.CurrentCamera
+local lplr = plrs.LocalPlayer
+
+local toggles = {
 	AimAssist = false,
 	ESP = false,
 	Hitboxes = false,
@@ -16,376 +17,371 @@ local Toggles = {
 	InstantInteract = false
 }
 
-local SETTINGS = {
-	AIM_STRENGTH = 0.4,
-	FOV_RADIUS = 60,
-	TARGET_PART = "Head",
-	MAX_DISTANCE = 300,
-	DELETE_CORPSES = true,
-	ESP_ENABLED = true,
-	MAX_ESP_COUNT = 10,
-	FILL_COLOR = Color3.fromRGB(255, 0, 0),
-	OUTLINE_COLOR = Color3.fromRGB(255, 255, 255),
-	FILL_TRANSPARENCY = 0.5,
-	OUTLINE_TRANSPARENCY = 0,
-	SCAN_RATE = 0.5
+local cfg = {
+	aimStrength = 0.4,
+	fov = 60,
+	targetPart = "Head",
+	maxDist = 300,
+	delCorpses = true,
+	maxEsp = 10,
+	espFill = Color3.fromRGB(255, 0, 0),
+	espOutline = Color3.fromRGB(255, 255, 255),
+	fillTrans = 0.5,
+	outTrans = 0,
+	scanRate = 0.5
 }
 
-local HITBOX_SETTINGS = {
-	ENABLED = true,
-	TARGET_PART = "Head",
-	SIZE = Vector3.new(2, 2, 2),
-	SHOW_HITBOX = true,
-	HITBOX_COLOR = BrickColor.new("Bright red"),
-	HITBOX_TRANSPARENCY = 0.7,
-	REFRESH_RATE = 1
+local hitboxCfg = {
+	enabled = true,
+	part = "Head",
+	size = Vector3.new(2, 2, 2),
+	show = true,
+	color = BrickColor.new("Bright red"),
+	trans = 0.7,
+	refreshRate = 1
 }
 
-local ScreenGui = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local Title = Instance.new("TextLabel")
-local MinimizeBtn = Instance.new("TextButton")
-local ButtonList = Instance.new("UIListLayout")
+local gui = Instance.new("ScreenGui")
+gui.Name = "OmniMenu"
+gui.Parent = cg
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-ScreenGui.Name = "OmniMenu"
-ScreenGui.Parent = CoreGui
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+local main = Instance.new("Frame")
+main.Name = "main"
+main.Parent = gui
+main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+main.BorderSizePixel = 0
+main.Position = UDim2.new(0.05, 0, 0.4, 0)
+main.Size = UDim2.new(0, 180, 0, 350)
+main.Active = true
+main.Draggable = true
+main.ClipsDescendants = true
 
-MainFrame.Name = "MainFrame"
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-MainFrame.BorderSizePixel = 0
-MainFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
-MainFrame.Size = UDim2.new(0, 180, 0, 350)
-MainFrame.Active = true
-MainFrame.Draggable = true
-MainFrame.ClipsDescendants = true
+local title = Instance.new("TextLabel")
+title.Parent = main
+title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Font = Enum.Font.GothamBold
+title.Text = "FOOL"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 14
 
-Title.Name = "Title"
-Title.Parent = MainFrame
-Title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.Font = Enum.Font.GothamBold
-Title.Text = "FOOL"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 14
+local minBtn = Instance.new("TextButton")
+minBtn.Parent = title
+minBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
+minBtn.Position = UDim2.new(1, -30, 0, 0)
+minBtn.Size = UDim2.new(0, 30, 1, 0)
+minBtn.Font = Enum.Font.GothamBold
+minBtn.Text = "-"
+minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minBtn.TextSize = 16
+minBtn.BorderSizePixel = 0
 
-MinimizeBtn.Name = "Minimize"
-MinimizeBtn.Parent = Title
-MinimizeBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
-MinimizeBtn.Position = UDim2.new(1, -30, 0, 0)
-MinimizeBtn.Size = UDim2.new(0, 30, 1, 0)
-MinimizeBtn.Font = Enum.Font.GothamBold
-MinimizeBtn.Text = "-"
-MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinimizeBtn.TextSize = 16
-MinimizeBtn.BorderSizePixel = 0
+local isMin = false
+local origSize = main.Size
 
-local minimized = false
-local originalSize = MainFrame.Size
-
-MinimizeBtn.MouseButton1Click:Connect(function()
-	minimized = not minimized
-	if minimized then
-		MainFrame.Size = UDim2.new(0, 180, 0, 30)
-		MinimizeBtn.Text = "+"
-		MinimizeBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 40)
+minBtn.MouseButton1Click:Connect(function()
+	isMin = not isMin
+	if isMin then
+		main.Size = UDim2.new(0, 180, 0, 30)
+		minBtn.Text = "+"
+		minBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 40)
 	else
-		MainFrame.Size = originalSize
-		MinimizeBtn.Text = "-"
-		MinimizeBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
+		main.Size = origSize
+		minBtn.Text = "-"
+		minBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
 	end
 end)
 
-ButtonList.Parent = MainFrame
-ButtonList.Padding = UDim.new(0, 5)
-ButtonList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-ButtonList.SortOrder = Enum.SortOrder.LayoutOrder
+local layout = Instance.new("UIListLayout")
+layout.Parent = main
+layout.Padding = UDim.new(0, 5)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+layout.SortOrder = Enum.SortOrder.LayoutOrder
 
-local function CreateToggle(name, stateKey)
-	local btn = Instance.new("TextButton")
-	btn.Name = name
-	btn.Parent = MainFrame
-	btn.BackgroundColor3 = Toggles[stateKey] and Color3.fromRGB(40, 150, 40) or Color3.fromRGB(150, 40, 40)
-	btn.Size = UDim2.new(0.9, 0, 0, 35)
-	btn.Font = Enum.Font.Gotham
-	btn.Text = name .. (Toggles[stateKey] and ": ON" or ": OFF")
-	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	btn.TextSize = 12
-	btn.BorderSizePixel = 0
+local function createToggle(name, key)
+	local b = Instance.new("TextButton")
+	b.Parent = main
+	b.BackgroundColor3 = toggles[key] and Color3.fromRGB(40, 150, 40) or Color3.fromRGB(150, 40, 40)
+	b.Size = UDim2.new(0.9, 0, 0, 35)
+	b.Font = Enum.Font.Gotham
+	b.Text = name .. (toggles[key] and ": ON" or ": OFF")
+	b.TextColor3 = Color3.fromRGB(255, 255, 255)
+	b.TextSize = 12
+	b.BorderSizePixel = 0
 
-	btn.MouseButton1Click:Connect(function()
-		Toggles[stateKey] = not Toggles[stateKey]
-		btn.Text = name .. (Toggles[stateKey] and ": ON" or ": OFF")
-		btn.BackgroundColor3 = Toggles[stateKey] and Color3.fromRGB(40, 150, 40) or Color3.fromRGB(150, 40, 40)
-		if stateKey == "ESP" and not Toggles.ESP then
-			for _, v in ipairs(Workspace:GetDescendants()) do
+	b.MouseButton1Click:Connect(function()
+		toggles[key] = not toggles[key]
+		b.Text = name .. (toggles[key] and ": ON" or ": OFF")
+		b.BackgroundColor3 = toggles[key] and Color3.fromRGB(40, 150, 40) or Color3.fromRGB(150, 40, 40)
+		
+		if key == "ESP" and not toggles.ESP then
+			for _, v in ipairs(ws:GetDescendants()) do
 				if v.Name == "NPCHighlight" then v:Destroy() end
 			end
 		end
 	end)
 end
 
-local function CreateSlider(name, min, max, default, callback)
+local function createSlider(name, minV, maxV, def, cb)
 	local container = Instance.new("Frame")
-	container.Name = name .. "Container"
-	container.Parent = MainFrame
+	container.Parent = main
 	container.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 	container.Size = UDim2.new(0.9, 0, 0, 45)
 	container.BorderSizePixel = 0
 	container.Active = true
 
-	local label = Instance.new("TextLabel")
-	label.Parent = container
-	label.BackgroundTransparency = 1
-	label.Size = UDim2.new(1, 0, 0.5, 0)
-	label.Font = Enum.Font.Gotham
-	label.Text = name .. ": " .. tostring(default)
-	label.TextColor3 = Color3.fromRGB(255, 255, 255)
-	label.TextSize = 12
+	local lbl = Instance.new("TextLabel")
+	lbl.Parent = container
+	lbl.BackgroundTransparency = 1
+	lbl.Size = UDim2.new(1, 0, 0.5, 0)
+	lbl.Font = Enum.Font.Gotham
+	lbl.Text = name .. ": " .. tostring(def)
+	lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+	lbl.TextSize = 12
 
-	local sliderBack = Instance.new("Frame")
-	sliderBack.Parent = container
-	sliderBack.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-	sliderBack.Position = UDim2.new(0.1, 0, 0.6, 0)
-	sliderBack.Size = UDim2.new(0.8, 0, 0, 10)
-	sliderBack.BorderSizePixel = 0
-	sliderBack.Active = true
+	local back = Instance.new("Frame")
+	back.Parent = container
+	back.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	back.Position = UDim2.new(0.1, 0, 0.6, 0)
+	back.Size = UDim2.new(0.8, 0, 0, 10)
+	back.BorderSizePixel = 0
+	back.Active = true
 
-	local sliderFill = Instance.new("Frame")
-	sliderFill.Parent = sliderBack
-	sliderFill.BackgroundColor3 = Color3.fromRGB(40, 150, 40)
-	sliderFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
-	sliderFill.BorderSizePixel = 0
-	sliderFill.Active = true
+	local fill = Instance.new("Frame")
+	fill.Parent = back
+	fill.BackgroundColor3 = Color3.fromRGB(40, 150, 40)
+	fill.Size = UDim2.new((def - minV) / (maxV - minV), 0, 1, 0)
+	fill.BorderSizePixel = 0
+	fill.Active = true
 
 	local dragging = false
 
-	local function updateSlider(input)
-		local pos = math.clamp((input.Position.X - sliderBack.AbsolutePosition.X) / sliderBack.AbsoluteSize.X, 0, 1)
-		sliderFill.Size = UDim2.new(pos, 0, 1, 0)
-		local value = min + (max - min) * pos
-		value = math.floor(value * 100) / 100
-		label.Text = name .. ": " .. tostring(value)
-		if callback then callback(value) end
+	local function update(input)
+		local pos = math.clamp((input.Position.X - back.AbsolutePosition.X) / back.AbsoluteSize.X, 0, 1)
+		fill.Size = UDim2.new(pos, 0, 1, 0)
+		local val = minV + (maxV - minV) * pos
+		val = math.floor(val * 100) / 100
+		lbl.Text = name .. ": " .. tostring(val)
+		if cb then cb(val) end
 	end
 
-	sliderBack.InputBegan:Connect(function(input)
+	back.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			dragging = true
-			updateSlider(input)
+			update(input)
 		end
 	end)
 
-	UserInputService.InputEnded:Connect(function(input)
+	uis.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			dragging = false
 		end
 	end)
 
-	UserInputService.InputChanged:Connect(function(input)
+	uis.InputChanged:Connect(function(input)
 		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-			updateSlider(input)
+			update(input)
 		end
 	end)
 end
 
-CreateToggle("Aim Assist", "AimAssist")
-CreateToggle("Visuals (ESP)", "ESP")
-CreateToggle("Big Hitboxes", "Hitboxes")
-CreateToggle("Fullbright", "Fullbright")
-CreateToggle("Instant Interact", "InstantInteract")
+createToggle("Aim Assist", "AimAssist")
+createToggle("Visuals (ESP)", "ESP")
+createToggle("Big Hitboxes", "Hitboxes")
+createToggle("Fullbright", "Fullbright")
+createToggle("Instant Interact", "InstantInteract")
 
-CreateSlider("Aim Strength", 0.01, 1.0, SETTINGS.AIM_STRENGTH, function(val)
-	SETTINGS.AIM_STRENGTH = val
-end)
+createSlider("Aim Strength", 0.01, 1.0, cfg.aimStrength, function(v) cfg.aimStrength = v end)
+createSlider("Hitbox Size", 1, 20, hitboxCfg.size.X, function(v) hitboxCfg.size = Vector3.new(v, v, v) end)
 
-CreateSlider("Hitbox Size", 1, 20, HITBOX_SETTINGS.SIZE.X, function(val)
-	HITBOX_SETTINGS.SIZE = Vector3.new(val, val, val)
-end)
-
-UserInputService.InputBegan:Connect(function(input, gpe)
+uis.InputBegan:Connect(function(input, gpe)
 	if not gpe and input.KeyCode == Enum.KeyCode.RightControl then
-		MainFrame.Visible = not MainFrame.Visible
+		main.Visible = not main.Visible
 	end
 end)
 
-local UniversalTargetSet = {}
+local validTargets = {}
 
-ProximityPromptService.PromptShown:Connect(function(prompt)
-	if Toggles.InstantInteract then
+pps.PromptShown:Connect(function(prompt)
+	if toggles.InstantInteract then
 		prompt.HoldDuration = 0
 	end
 end)
 
-local function applyESP(model)
-	if not Toggles.ESP then return end
-	local highlight = model:FindFirstChild("NPCHighlight")
-	if not highlight then
-		highlight = Instance.new("Highlight")
-		highlight.Name = "NPCHighlight"
-		highlight.Parent = model
+local function applyEsp(model)
+	if not toggles.ESP then return end
+	local hl = model:FindFirstChild("NPCHighlight")
+	if not hl then
+		hl = Instance.new("Highlight")
+		hl.Name = "NPCHighlight"
+		hl.Parent = model
 	end
-	highlight.FillColor = SETTINGS.FILL_COLOR
-	highlight.OutlineColor = SETTINGS.OUTLINE_COLOR
-	highlight.FillTransparency = SETTINGS.FILL_TRANSPARENCY
-	highlight.OutlineTransparency = SETTINGS.OUTLINE_TRANSPARENCY
-	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	hl.FillColor = cfg.espFill
+	hl.OutlineColor = cfg.espOutline
+	hl.FillTransparency = cfg.fillTrans
+	hl.OutlineTransparency = cfg.outTrans
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 end
 
-local lineX = Drawing.new("Line")
-local lineY = Drawing.new("Line")
-lineX.Visible, lineY.Visible = true, true
-lineX.Thickness, lineY.Thickness = 2, 2
-lineX.Color, lineY.Color = Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255)
+local crossX = Drawing.new("Line")
+local crossY = Drawing.new("Line")
+crossX.Visible, crossY.Visible = true, true
+crossX.Thickness, crossY.Thickness = 2, 2
+crossX.Color, crossY.Color = Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255)
 
-local function EvaluateWorld()
-	local tempTargets = {}
-	local npcsInRange = {}
-	local playerPos = Camera.CFrame.Position
-	if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-		playerPos = LocalPlayer.Character.HumanoidRootPart.Position
+local function refreshTargets()
+	local tTargets = {}
+	local inRange = {}
+	local pPos = cam.CFrame.Position
+	
+	if lplr.Character and lplr.Character:FindFirstChild("HumanoidRootPart") then
+		pPos = lplr.Character.HumanoidRootPart.Position
 	end
-	local children = Workspace:GetChildren()
-	for i = 1, #children do
-		local obj = children[i]
+	
+	for _, obj in ipairs(ws:GetChildren()) do
 		if not obj:IsA("Model") then continue end
-		local objPos = (obj.PrimaryPart and obj.PrimaryPart.Position) or (obj:FindFirstChild("HumanoidRootPart") and obj.HumanoidRootPart.Position)
-		local dist = objPos and (objPos - playerPos).Magnitude or math.huge
-		if dist > SETTINGS.MAX_DISTANCE then
-			local oldH = obj:FindFirstChild("NPCHighlight")
-			if oldH then oldH:Destroy() end
+		
+		local root = obj.PrimaryPart or obj:FindFirstChild("HumanoidRootPart")
+		local objPos = root and root.Position
+		local dist = objPos and (objPos - pPos).Magnitude or math.huge
+		
+		if dist > cfg.maxDist then
+			local old = obj:FindFirstChild("NPCHighlight")
+			if old then old:Destroy() end
 			continue
 		end
+		
 		local hum = obj:FindFirstChildOfClass("Humanoid")
 		if hum then
-			if SETTINGS.DELETE_CORPSES and hum.Health <= 0 then
+			if cfg.delCorpses and hum.Health <= 0 then
 				obj:Destroy()
 				continue
 			end
-			local part = obj:FindFirstChild(SETTINGS.TARGET_PART)
+			
+			local part = obj:FindFirstChild(cfg.targetPart)
 			if hum.Health > 0 and part and not obj:FindFirstChild("REVIVE") then
-				table.insert(npcsInRange, {model = obj, distance = dist})
+				inRange[#inRange + 1] = {model = obj, dist = dist}
 			else
-				local oldH = obj:FindFirstChild("NPCHighlight")
-				if oldH then oldH:Destroy() end
+				local old = obj:FindFirstChild("NPCHighlight")
+				if old then old:Destroy() end
 			end
 		end
 	end
-	table.sort(npcsInRange, function(a, b) return a.distance < b.distance end)
-	for index, npcData in ipairs(npcsInRange) do
-		local obj = npcData.model
-		table.insert(tempTargets, obj)
-		if index <= SETTINGS.MAX_ESP_COUNT then
-			applyESP(obj)
+	
+	table.sort(inRange, function(a, b) return a.dist < b.dist end)
+	
+	for i, data in ipairs(inRange) do
+		tTargets[#tTargets + 1] = data.model
+		if i <= cfg.maxEsp then
+			applyEsp(data.model)
 		else
-			local oldH = obj:FindFirstChild("NPCHighlight")
-			if oldH then oldH:Destroy() end
+			local old = data.model:FindFirstChild("NPCHighlight")
+			if old then old:Destroy() end
 		end
 	end
-	UniversalTargetSet = tempTargets
+	validTargets = tTargets
 end
 
 task.spawn(function()
 	while true do
-		EvaluateWorld()
-		task.wait(SETTINGS.SCAN_RATE)
+		refreshTargets()
+		task.wait(cfg.scanRate)
 	end
 end)
 
-RunService.RenderStepped:Connect(function()
-	local mouseLoc = UserInputService:GetMouseLocation()
-	lineX.From = Vector2.new(mouseLoc.X - 10, mouseLoc.Y)
-	lineX.To = Vector2.new(mouseLoc.X + 10, mouseLoc.Y)
-	lineY.From = Vector2.new(mouseLoc.X, mouseLoc.Y - 10)
-	lineY.To = Vector2.new(mouseLoc.X, mouseLoc.Y + 10)
+rs.RenderStepped:Connect(function()
+	local mouse = uis:GetMouseLocation()
+	crossX.From = Vector2.new(mouse.X - 10, mouse.Y)
+	crossX.To = Vector2.new(mouse.X + 10, mouse.Y)
+	crossY.From = Vector2.new(mouse.X, mouse.Y - 10)
+	crossY.To = Vector2.new(mouse.X, mouse.Y + 10)
 
-	if not Toggles.AimAssist then
-		lineX.Color, lineY.Color = Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255)
+	if not toggles.AimAssist then
+		crossX.Color, crossY.Color = Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255)
 		return
 	end
 
-	local closestTorso = nil
-	local shortestDist = SETTINGS.FOV_RADIUS
-
-	local ignoreList = { LocalPlayer.Character }
-	for _, npc in ipairs(UniversalTargetSet) do
-		table.insert(ignoreList, npc)
+	local bestTorso = nil
+	local shortest = cfg.fov
+	local ignore = { lplr.Character }
+	
+	for _, npc in ipairs(validTargets) do
+		ignore[#ignore + 1] = npc
 	end
 
-	for _, npc in ipairs(UniversalTargetSet) do
-		local torso = npc:FindFirstChild(SETTINGS.TARGET_PART)
+	for _, npc in ipairs(validTargets) do
+		local torso = npc:FindFirstChild(cfg.targetPart)
 		if torso then
-			local screenPos, onScreen = Camera:WorldToViewportPoint(torso.Position)
+			local sPos, onScreen = cam:WorldToViewportPoint(torso.Position)
 			if onScreen then
-				local dist = (Vector2.new(screenPos.X, screenPos.Y) - mouseLoc).Magnitude
-				if dist < shortestDist then
-					local obscuring = Camera:GetPartsObscuringTarget({ torso.Position }, ignoreList)
+				local dist = (Vector2.new(sPos.X, sPos.Y) - mouse).Magnitude
+				if dist < shortest then
+					local obscuring = cam:GetPartsObscuringTarget({ torso.Position }, ignore)
 					if #obscuring == 0 then
-						closestTorso = torso
-						shortestDist = dist
+						bestTorso = torso
+						shortest = dist
 					end
 				end
 			end
 		end
 	end
 
-	if closestTorso then
-		lineX.Color, lineY.Color = Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 0, 0)
-		local screenPos = Camera:WorldToViewportPoint(closestTorso.Position)
+	if bestTorso then
+		crossX.Color, crossY.Color = Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 0, 0)
+		local sPos = cam:WorldToViewportPoint(bestTorso.Position)
 		if mousemoverel then
-			mousemoverel((screenPos.X - mouseLoc.X) * SETTINGS.AIM_STRENGTH, (screenPos.Y - mouseLoc.Y) * SETTINGS.AIM_STRENGTH)
+			mousemoverel((sPos.X - mouse.X) * cfg.aimStrength, (sPos.Y - mouse.Y) * cfg.aimStrength)
 		end
 	else
-		lineX.Color, lineY.Color = Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255)
+		crossX.Color, crossY.Color = Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255)
 	end
 end)
 
 task.spawn(function()
 	while true do
-		for _, obj in ipairs(Workspace:GetChildren()) do
-			if Players:GetPlayerFromCharacter(obj) then continue end
+		for _, obj in ipairs(ws:GetChildren()) do
+			if plrs:GetPlayerFromCharacter(obj) then continue end
 			if obj:IsA("Model") then
 				local hum = obj:FindFirstChildOfClass("Humanoid")
-				local targetPart = obj:FindFirstChild(HITBOX_SETTINGS.TARGET_PART)
-				if targetPart then
-					if Toggles.Hitboxes and hum and hum.Health > 0 then
-						if not targetPart:GetAttribute("OriginalSize") then
-							targetPart:SetAttribute("OriginalSize", targetPart.Size)
-							targetPart:SetAttribute("OriginalTransparency", targetPart.Transparency)
-							targetPart:SetAttribute("OriginalColor", targetPart.BrickColor.Name)
+				local tPart = obj:FindFirstChild(hitboxCfg.part)
+				
+				if tPart then
+					if toggles.Hitboxes and hum and hum.Health > 0 then
+						if not tPart:GetAttribute("OrigSize") then
+							tPart:SetAttribute("OrigSize", tPart.Size)
+							tPart:SetAttribute("OrigTrans", tPart.Transparency)
+							tPart:SetAttribute("OrigColor", tPart.BrickColor.Name)
 						end
-						if targetPart.Size ~= HITBOX_SETTINGS.SIZE then
-							targetPart.Size = HITBOX_SETTINGS.SIZE
-							targetPart.CanCollide = false
-							targetPart.Massless = true
-							if HITBOX_SETTINGS.SHOW_HITBOX then
-								targetPart.Transparency = HITBOX_SETTINGS.HITBOX_TRANSPARENCY
-								targetPart.BrickColor = HITBOX_SETTINGS.HITBOX_COLOR
+						if tPart.Size ~= hitboxCfg.size then
+							tPart.Size = hitboxCfg.size
+							tPart.CanCollide = false
+							tPart.Massless = true
+							if hitboxCfg.show then
+								tPart.Transparency = hitboxCfg.trans
+								tPart.BrickColor = hitboxCfg.color
 							end
 						end
-					elseif not Toggles.Hitboxes then
-						if targetPart:GetAttribute("OriginalSize") and targetPart.Size ~= targetPart:GetAttribute("OriginalSize") then
-							targetPart.Size = targetPart:GetAttribute("OriginalSize")
-							targetPart.Transparency = targetPart:GetAttribute("OriginalTransparency")
-							targetPart.BrickColor = BrickColor.new(targetPart:GetAttribute("OriginalColor"))
+					elseif not toggles.Hitboxes then
+						if tPart:GetAttribute("OrigSize") and tPart.Size ~= tPart:GetAttribute("OrigSize") then
+							tPart.Size = tPart:GetAttribute("OrigSize")
+							tPart.Transparency = tPart:GetAttribute("OrigTrans")
+							tPart.BrickColor = BrickColor.new(tPart:GetAttribute("OrigColor"))
 						end
 					end
 				end
 			end
 		end
-		task.wait(HITBOX_SETTINGS.REFRESH_RATE)
+		task.wait(hitboxCfg.refreshRate)
 	end
 end)
 
-local function applyFullbright()
-	if not Toggles.Fullbright then return end
-	Lighting.Brightness = 2
-	Lighting.ClockTime = 14
-	Lighting.FogEnd = 100000
-	Lighting.GlobalShadows = false
-	Lighting.Ambient = Color3.fromRGB(178, 178, 178)
-	Lighting.OutdoorAmbient = Color3.fromRGB(178, 178, 178)
-end
-
-Lighting.Changed:Connect(applyFullbright)
+lighting.Changed:Connect(function()
+	if not toggles.Fullbright then return end
+	lighting.Brightness = 2
+	lighting.ClockTime = 14
+	lighting.FogEnd = 100000
+	lighting.GlobalShadows = false
+	lighting.Ambient = Color3.fromRGB(178, 178, 178)
+	lighting.OutdoorAmbient = Color3.fromRGB(178, 178, 178)
+end)
