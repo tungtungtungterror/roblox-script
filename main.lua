@@ -14,7 +14,8 @@ local toggles = {
 	ESP = false,
 	Hitboxes = false,
 	Fullbright = false,
-	InstantInteract = false
+	InstantInteract = false,
+	DelCorpses = true
 }
 
 local cfg = {
@@ -52,7 +53,7 @@ main.Parent = gui
 main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 main.BorderSizePixel = 0
 main.Position = UDim2.new(0.05, 0, 0.4, 0)
-main.Size = UDim2.new(0, 180, 0, 350)
+main.Size = UDim2.new(0, 180, 0, 440)
 main.Active = true
 main.Draggable = true
 main.ClipsDescendants = true
@@ -114,7 +115,7 @@ local function createToggle(name, key)
 		toggles[key] = not toggles[key]
 		b.Text = name .. (toggles[key] and ": ON" or ": OFF")
 		b.BackgroundColor3 = toggles[key] and Color3.fromRGB(40, 150, 40) or Color3.fromRGB(150, 40, 40)
-		
+
 		if key == "ESP" and not toggles.ESP then
 			for _, v in ipairs(ws:GetDescendants()) do
 				if v.Name == "NPCHighlight" then v:Destroy() end
@@ -167,20 +168,25 @@ local function createSlider(name, minV, maxV, def, cb)
 	end
 
 	back.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
 			update(input)
 		end
 	end)
 
 	uis.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = false
 		end
 	end)
 
 	uis.InputChanged:Connect(function(input)
-		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+		if dragging and (
+			input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch
+		) then
 			update(input)
 		end
 	end)
@@ -191,8 +197,10 @@ createToggle("Visuals (ESP)", "ESP")
 createToggle("Big Hitboxes", "Hitboxes")
 createToggle("Fullbright", "Fullbright")
 createToggle("Instant Interact", "InstantInteract")
+createToggle("Del Corpses", "DelCorpses")
 
 createSlider("Aim Strength", 0.01, 1.0, cfg.aimStrength, function(v) cfg.aimStrength = v end)
+createSlider("FOV", 10, 300, cfg.fov, function(v) cfg.fov = v end)
 createSlider("Hitbox Size", 1, 20, hitboxCfg.size.X, function(v) hitboxCfg.size = Vector3.new(v, v, v) end)
 
 uis.InputBegan:Connect(function(input, gpe)
@@ -234,31 +242,28 @@ local function refreshTargets()
 	local tTargets = {}
 	local inRange = {}
 	local pPos = cam.CFrame.Position
-	
+
 	if lplr.Character and lplr.Character:FindFirstChild("HumanoidRootPart") then
 		pPos = lplr.Character.HumanoidRootPart.Position
 	end
-	
+
 	for _, obj in ipairs(ws:GetChildren()) do
 		if not obj:IsA("Model") then continue end
-		
+
 		local root = obj.PrimaryPart or obj:FindFirstChild("HumanoidRootPart")
 		local objPos = root and root.Position
 		local dist = objPos and (objPos - pPos).Magnitude or math.huge
-		
+
 		if dist > cfg.maxDist then
 			local old = obj:FindFirstChild("NPCHighlight")
 			if old then old:Destroy() end
 			continue
 		end
-		
+
 		local hum = obj:FindFirstChildOfClass("Humanoid")
 		if hum then
-			if cfg.delCorpses and hum.Health <= 0 then
-				obj:Destroy()
-				continue
-			end
-			
+			if toggles.DelCorpses and hum.Health <= 0 then continue end
+
 			local part = obj:FindFirstChild(cfg.targetPart)
 			if hum.Health > 0 and part and not obj:FindFirstChild("REVIVE") then
 				inRange[#inRange + 1] = {model = obj, dist = dist}
@@ -268,9 +273,9 @@ local function refreshTargets()
 			end
 		end
 	end
-	
+
 	table.sort(inRange, function(a, b) return a.dist < b.dist end)
-	
+
 	for i, data in ipairs(inRange) do
 		tTargets[#tTargets + 1] = data.model
 		if i <= cfg.maxEsp then
@@ -285,12 +290,28 @@ end
 
 task.spawn(function()
 	while true do
+		if toggles.DelCorpses then
+			for _, obj in ipairs(ws:GetChildren()) do
+				if obj:IsA("Model") then
+					local hum = obj:FindFirstChildOfClass("Humanoid")
+					if hum and hum.Health <= 0 then
+						obj:Destroy()
+					end
+				end
+			end
+		end
+		task.wait(0.1)
+	end
+end)
+
+task.spawn(function()
+	while true do
 		refreshTargets()
 		task.wait(cfg.scanRate)
 	end
 end)
 
-rs.RenderStepped:Connect(function()
+rs.RenderStepped:Connect(function(dt)
 	local mouse = uis:GetMouseLocation()
 	crossX.From = Vector2.new(mouse.X - 10, mouse.Y)
 	crossX.To = Vector2.new(mouse.X + 10, mouse.Y)
@@ -305,7 +326,7 @@ rs.RenderStepped:Connect(function()
 	local bestTorso = nil
 	local shortest = cfg.fov
 	local ignore = { lplr.Character }
-	
+
 	for _, npc in ipairs(validTargets) do
 		ignore[#ignore + 1] = npc
 	end
@@ -318,7 +339,41 @@ rs.RenderStepped:Connect(function()
 				local dist = (Vector2.new(sPos.X, sPos.Y) - mouse).Magnitude
 				if dist < shortest then
 					local obscuring = cam:GetPartsObscuringTarget({ torso.Position }, ignore)
-					if #obscuring == 0 then
+					local blocked = false
+					for _, part in ipairs(obscuring) do
+						local parent = part.Parent
+						local parentName = parent and parent.Name:lower() or ""
+						local isDoor = parentName:find("wooden door") or part.Name:lower():find("door")
+						if isDoor then continue end
+
+local isGui = false
+local guiCheck = part.Parent
+while guiCheck and guiCheck ~= ws do
+    if guiCheck:IsA("GuiObject") or guiCheck:IsA("BasePlayerGui") or guiCheck:IsA("ScreenGui") then
+        isGui = true
+        break
+    end
+    guiCheck = guiCheck.Parent
+end
+if isGui then continue end
+
+						local ancestor = part.Parent
+						local inRoom = false
+						while ancestor and ancestor ~= ws do
+							local n = ancestor.Name:lower()
+							if ancestor:IsA("Model") and (n:find("room") or n:find("start") or n:find("bossfight")) then
+								inRoom = true
+								break
+							end
+							ancestor = ancestor.Parent
+						end
+
+						if inRoom then
+							blocked = true
+							break
+						end
+					end
+					if not blocked then
 						bestTorso = torso
 						shortest = dist
 					end
@@ -329,9 +384,28 @@ rs.RenderStepped:Connect(function()
 
 	if bestTorso then
 		crossX.Color, crossY.Color = Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 0, 0)
-		local sPos = cam:WorldToViewportPoint(bestTorso.Position)
-		if mousemoverel then
-			mousemoverel((sPos.X - mouse.X) * cfg.aimStrength, (sPos.Y - mouse.Y) * cfg.aimStrength)
+
+		local root = bestTorso.Parent and bestTorso.Parent:FindFirstChild("HumanoidRootPart")
+		local vel = root and root.AssemblyLinearVelocity or Vector3.zero
+		local pingComp = 0.055
+		local predictedPos = bestTorso.Position + vel * pingComp
+
+		local sPos = cam:WorldToViewportPoint(predictedPos)
+		local dx = sPos.X - mouse.X
+		local dy = sPos.Y - mouse.Y
+		local dist2D = math.sqrt(dx * dx + dy * dy)
+
+		if dist2D > 0.5 then
+			local distScale = math.clamp(dist2D / 80, 0.65, 1.0)
+			local strength = cfg.aimStrength * distScale
+
+			if mousemoverel and not uis.TouchEnabled then
+				mousemoverel(dx * strength, dy * strength)
+			else
+				local lerpAlpha = math.clamp(strength * dt * 18, 0, 0.5)
+				local targetCF = CFrame.new(cam.CFrame.Position, predictedPos)
+				cam.CFrame = cam.CFrame:Lerp(targetCF, lerpAlpha)
+			end
 		end
 	else
 		crossX.Color, crossY.Color = Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255)
@@ -345,7 +419,7 @@ task.spawn(function()
 			if obj:IsA("Model") then
 				local hum = obj:FindFirstChildOfClass("Humanoid")
 				local tPart = obj:FindFirstChild(hitboxCfg.part)
-				
+
 				if tPart then
 					if toggles.Hitboxes and hum and hum.Health > 0 then
 						if not tPart:GetAttribute("OrigSize") then
