@@ -15,14 +15,14 @@ local toggles = {
 	Hitboxes = false,
 	Fullbright = false,
 	InstantInteract = false,
-	DelCorpses = true
+	DelCorpses = false
 }
 
 local cfg = {
-	aimStrength = 0.4,
+	aimStrength = 0.5,
 	fov = 60,
 	targetPart = "Head",
-	maxDist = 300,
+	maxDist = 500,
 	delCorpses = true,
 	maxEsp = 10,
 	espFill = Color3.fromRGB(255, 0, 0),
