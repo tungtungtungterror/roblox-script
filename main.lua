@@ -42,6 +42,7 @@ local hitboxCfg = {
 	refreshRate = 1
 }
 
+-- GUI Setup
 local gui = Instance.new("ScreenGui")
 gui.Name = "OmniMenu"
 gui.Parent = cg
@@ -52,11 +53,16 @@ main.Name = "main"
 main.Parent = gui
 main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 main.BorderSizePixel = 0
-main.Position = UDim2.new(0.05, 0, 0.4, 0)
-main.Size = UDim2.new(0, 180, 0, 440)
+main.Position = UDim2.new(0.05, 0, 0.2, 0)
+main.Size = UDim2.new(0.2, 0, 0.6, 0)
 main.Active = true
 main.Draggable = true
-main.ClipsDescendants = true
+main.ClipsDescendants = true -- Ensures children stay inside the frame boundaries
+
+local sizeConstraint = Instance.new("UISizeConstraint")
+sizeConstraint.Parent = main
+sizeConstraint.MinSize = Vector2.new(150, 250)
+sizeConstraint.MaxSize = Vector2.new(250, 600)
 
 local title = Instance.new("TextLabel")
 title.Parent = main
@@ -71,38 +77,69 @@ local minBtn = Instance.new("TextButton")
 minBtn.Parent = title
 minBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
 minBtn.Position = UDim2.new(1, -30, 0, 0)
-minBtn.Size = UDim2.new(0, 30, 1, 0)
+minBtn.Size = UDim2.new(0, 30, 0, 30)
 minBtn.Font = Enum.Font.GothamBold
 minBtn.Text = "-"
 minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 minBtn.TextSize = 16
 minBtn.BorderSizePixel = 0
 
+local scroll = Instance.new("ScrollingFrame")
+scroll.Name = "Scroll"
+scroll.Parent = main
+scroll.BackgroundTransparency = 1
+scroll.BorderSizePixel = 0
+scroll.Position = UDim2.new(0, 0, 0, 35)
+scroll.Size = UDim2.new(1, 0, 1, -35)
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scroll.ScrollBarThickness = 2
+scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+local layout = Instance.new("UIListLayout")
+layout.Parent = scroll
+layout.Padding = UDim.new(0, 5)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+
 local isMin = false
 local origSize = main.Size
 
+-- Logic for "Only the Plus Sign" minimization
 minBtn.MouseButton1Click:Connect(function()
 	isMin = not isMin
 	if isMin then
-		main.Size = UDim2.new(0, 180, 0, 30)
+		origSize = main.Size -- Save current size before shrinking
+		scroll.Visible = false
+		title.BackgroundTransparency = 1
+		title.TextTransparency = 1
+		main.BackgroundTransparency = 1
+		
+		-- Move button to the corner of the main frame and shrink the frame
+		minBtn.Parent = main 
+		minBtn.Position = UDim2.new(0, 0, 0, 0)
+		main.Size = UDim2.new(0, 30, 0, 30)
+		
 		minBtn.Text = "+"
 		minBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 40)
 	else
 		main.Size = origSize
+		scroll.Visible = true
+		title.BackgroundTransparency = 0
+		title.TextTransparency = 0
+		main.BackgroundTransparency = 0
+		
+		-- Move button back to the title bar
+		minBtn.Parent = title
+		minBtn.Position = UDim2.new(1, -30, 0, 0)
+		
 		minBtn.Text = "-"
 		minBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
 	end
 end)
 
-local layout = Instance.new("UIListLayout")
-layout.Parent = main
-layout.Padding = UDim.new(0, 5)
-layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-layout.SortOrder = Enum.SortOrder.LayoutOrder
-
 local function createToggle(name, key)
 	local b = Instance.new("TextButton")
-	b.Parent = main
+	b.Parent = scroll
 	b.BackgroundColor3 = toggles[key] and Color3.fromRGB(40, 150, 40) or Color3.fromRGB(150, 40, 40)
 	b.Size = UDim2.new(0.9, 0, 0, 35)
 	b.Font = Enum.Font.Gotham
@@ -126,11 +163,10 @@ end
 
 local function createSlider(name, minV, maxV, def, cb)
 	local container = Instance.new("Frame")
-	container.Parent = main
+	container.Parent = scroll
 	container.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 	container.Size = UDim2.new(0.9, 0, 0, 45)
 	container.BorderSizePixel = 0
-	container.Active = true
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Parent = container
@@ -139,25 +175,22 @@ local function createSlider(name, minV, maxV, def, cb)
 	lbl.Font = Enum.Font.Gotham
 	lbl.Text = name .. ": " .. tostring(def)
 	lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-	lbl.TextSize = 12
+	lbl.TextSize = 10
 
 	local back = Instance.new("Frame")
 	back.Parent = container
 	back.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 	back.Position = UDim2.new(0.1, 0, 0.6, 0)
-	back.Size = UDim2.new(0.8, 0, 0, 10)
+	back.Size = UDim2.new(0.8, 0, 0, 8)
 	back.BorderSizePixel = 0
-	back.Active = true
 
 	local fill = Instance.new("Frame")
 	fill.Parent = back
 	fill.BackgroundColor3 = Color3.fromRGB(40, 150, 40)
 	fill.Size = UDim2.new((def - minV) / (maxV - minV), 0, 1, 0)
 	fill.BorderSizePixel = 0
-	fill.Active = true
 
 	local dragging = false
-
 	local function update(input)
 		local pos = math.clamp((input.Position.X - back.AbsolutePosition.X) / back.AbsoluteSize.X, 0, 1)
 		fill.Size = UDim2.new(pos, 0, 1, 0)
@@ -168,25 +201,20 @@ local function createSlider(name, minV, maxV, def, cb)
 	end
 
 	back.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.Touch then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
 			update(input)
 		end
 	end)
 
 	uis.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.Touch then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = false
 		end
 	end)
 
 	uis.InputChanged:Connect(function(input)
-		if dragging and (
-			input.UserInputType == Enum.UserInputType.MouseMovement
-			or input.UserInputType == Enum.UserInputType.Touch
-		) then
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 			update(input)
 		end
 	end)
@@ -312,11 +340,12 @@ task.spawn(function()
 end)
 
 rs.RenderStepped:Connect(function(dt)
-	local mouse = uis:GetMouseLocation()
-	crossX.From = Vector2.new(mouse.X - 10, mouse.Y)
-	crossX.To = Vector2.new(mouse.X + 10, mouse.Y)
-	crossY.From = Vector2.new(mouse.X, mouse.Y - 10)
-	crossY.To = Vector2.new(mouse.X, mouse.Y + 10)
+	local center = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+
+	crossX.From = Vector2.new(center.X - 10, center.Y)
+	crossX.To = Vector2.new(center.X + 10, center.Y)
+	crossY.From = Vector2.new(center.X, center.Y - 10)
+	crossY.To = Vector2.new(center.X, center.Y + 10)
 
 	if not toggles.AimAssist then
 		crossX.Color, crossY.Color = Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255)
@@ -336,7 +365,7 @@ rs.RenderStepped:Connect(function(dt)
 		if torso then
 			local sPos, onScreen = cam:WorldToViewportPoint(torso.Position)
 			if onScreen then
-				local dist = (Vector2.new(sPos.X, sPos.Y) - mouse).Magnitude
+				local dist = (Vector2.new(sPos.X, sPos.Y) - center).Magnitude
 				if dist < shortest then
 					local obscuring = cam:GetPartsObscuringTarget({ torso.Position }, ignore)
 					local blocked = false
@@ -346,16 +375,16 @@ rs.RenderStepped:Connect(function(dt)
 						local isDoor = parentName:find("wooden door") or part.Name:lower():find("door")
 						if isDoor then continue end
 
-local isGui = false
-local guiCheck = part.Parent
-while guiCheck and guiCheck ~= ws do
-    if guiCheck:IsA("GuiObject") or guiCheck:IsA("BasePlayerGui") or guiCheck:IsA("ScreenGui") then
-        isGui = true
-        break
-    end
-    guiCheck = guiCheck.Parent
-end
-if isGui then continue end
+						local isGui = false
+						local guiCheck = part.Parent
+						while guiCheck and guiCheck ~= ws do
+							if guiCheck:IsA("GuiObject") or guiCheck:IsA("BasePlayerGui") or guiCheck:IsA("ScreenGui") then
+								isGui = true
+								break
+							end
+							guiCheck = guiCheck.Parent
+						end
+						if isGui then continue end
 
 						local ancestor = part.Parent
 						local inRoom = false
@@ -384,15 +413,14 @@ if isGui then continue end
 
 	if bestTorso then
 		crossX.Color, crossY.Color = Color3.fromRGB(255, 0, 0), Color3.fromRGB(255, 0, 0)
-
 		local root = bestTorso.Parent and bestTorso.Parent:FindFirstChild("HumanoidRootPart")
 		local vel = root and root.AssemblyLinearVelocity or Vector3.zero
 		local pingComp = 0.055
 		local predictedPos = bestTorso.Position + vel * pingComp
 
 		local sPos = cam:WorldToViewportPoint(predictedPos)
-		local dx = sPos.X - mouse.X
-		local dy = sPos.Y - mouse.Y
+		local dx = sPos.X - center.X
+		local dy = sPos.Y - center.Y
 		local dist2D = math.sqrt(dx * dx + dy * dy)
 
 		if dist2D > 0.5 then
