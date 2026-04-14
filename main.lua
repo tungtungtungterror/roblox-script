@@ -104,34 +104,31 @@ layout.SortOrder = Enum.SortOrder.LayoutOrder
 local isMin = false
 local origSize = main.Size
 
--- Logic for "Only the Plus Sign" minimization
+-- keep button always on main, never reparent
+minBtn.Parent = main
+minBtn.ZIndex = 10
+minBtn.Position = UDim2.new(1, -30, 0, 0)
+
 minBtn.MouseButton1Click:Connect(function()
 	isMin = not isMin
 	if isMin then
-		origSize = main.Size -- Save current size before shrinking
+		origSize = main.Size
 		scroll.Visible = false
-		title.BackgroundTransparency = 1
-		title.TextTransparency = 1
+		title.Visible = false
 		main.BackgroundTransparency = 1
-		
-		-- Move button to the corner of the main frame and shrink the frame
-		minBtn.Parent = main 
-		minBtn.Position = UDim2.new(0, 0, 0, 0)
+		main.ClipsDescendants = false -- allow button to show outside shrunk frame
 		main.Size = UDim2.new(0, 30, 0, 30)
-		
+		main.Active = false -- cant drag the invisible area anymore
 		minBtn.Text = "+"
 		minBtn.BackgroundColor3 = Color3.fromRGB(40, 150, 40)
 	else
 		main.Size = origSize
 		scroll.Visible = true
-		title.BackgroundTransparency = 0
-		title.TextTransparency = 0
+		title.Visible = true
 		main.BackgroundTransparency = 0
-		
-		-- Move button back to the title bar
-		minBtn.Parent = title
+		main.ClipsDescendants = true
+		main.Active = true
 		minBtn.Position = UDim2.new(1, -30, 0, 0)
-		
 		minBtn.Text = "-"
 		minBtn.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
 	end
@@ -486,4 +483,4 @@ lighting.Changed:Connect(function()
 	lighting.GlobalShadows = false
 	lighting.Ambient = Color3.fromRGB(178, 178, 178)
 	lighting.OutdoorAmbient = Color3.fromRGB(178, 178, 178)
-end)
+end)	
