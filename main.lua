@@ -12,12 +12,17 @@ local lplr = plrs.LocalPlayer
 local toggles = {
     AimAssist = false,
     ESP = false,
+    PlayerESP = false,
     Hitboxes = false,
     Fullbright = false,
     InstantInteract = false,
     DelCorpses = false,
-    UltraPotato = false,
     Speed = false,
+    -- Optimization
+    LowVisuals = false,
+    InstanceOptimizer = false,
+    ParticleCap = false,
+    UltraPotato = false,
 }
 
 local cfg = {
@@ -133,6 +138,19 @@ minBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+-- Section label
+local function createSection(name)
+    local lbl = Instance.new("TextLabel")
+    lbl.Parent = scroll
+    lbl.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    lbl.Size = UDim2.new(0.9, 0, 0, 24)
+    lbl.Font = Enum.Font.GothamBold
+    lbl.Text = "— " .. name .. " —"
+    lbl.TextColor3 = Color3.fromRGB(180, 180, 180)
+    lbl.TextSize = 10
+    lbl.BorderSizePixel = 0
+end
+
 local function createToggle(name, key)
     local b = Instance.new("TextButton")
     b.Parent = scroll
@@ -216,21 +234,30 @@ local function createSlider(name, minV, maxV, def, cb)
     end)
 end
 
--- Toggles
+-- General section
+createSection("General")
 createToggle("Aim Assist", "AimAssist")
-createToggle("Visuals (ESP)", "ESP")
+createToggle("NPC ESP", "ESP")
+createToggle("Player ESP", "PlayerESP")
 createToggle("Big Hitboxes", "Hitboxes")
 createToggle("Fullbright", "Fullbright")
 createToggle("Instant Interact", "InstantInteract")
 createToggle("Del Corpses", "DelCorpses")
-createToggle("Ultra Potato", "UltraPotato")
 createToggle("Speed Modifier", "Speed")
 
 -- Sliders
+createSection("Settings")
 createSlider("Aim Strength", 0.01, 1.0, cfg.aimStrength, function(v) cfg.aimStrength = v end)
 createSlider("FOV", 10, 300, cfg.fov, function(v) cfg.fov = v end)
 createSlider("Hitbox Size", 1, 20, hitboxCfg.size.X, function(v) hitboxCfg.size = Vector3.new(v, v, v) end)
 createSlider("Walk Speed", 1, 100, cfg.speed, function(v) cfg.speed = v end)
+
+-- Optimization section
+createSection("Optimization")
+createToggle("Low Visuals", "LowVisuals")
+createToggle("Instance Optimizer", "InstanceOptimizer")
+createToggle("Particle Cap", "ParticleCap")
+createToggle("Ultra Potato", "UltraPotato")
 
 -- Toggle menu visibility
 uis.InputBegan:Connect(function(input, gpe)
@@ -288,7 +315,7 @@ pps.PromptShown:Connect(function(prompt)
     end
 end)
 
--- ESP
+-- NPC ESP
 local function applyEsp(model)
     if not toggles.ESP then return end
     local hl = model:FindFirstChild("NPCHighlight")
@@ -303,6 +330,53 @@ local function applyEsp(model)
     hl.OutlineTransparency = cfg.outTrans
     hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 end
+
+-- Player ESP
+local function applyPlayerESP(state)
+    for _, plr in ipairs(plrs:GetPlayers()) do
+        if plr == lplr then continue end
+        local char = plr.Character
+        if not char then continue end
+        local hl = char:FindFirstChild("PlayerHighlight")
+        if state then
+            if not hl then
+                hl = Instance.new("Highlight")
+                hl.Name = "PlayerHighlight"
+                hl.FillColor = Color3.fromRGB(0, 120, 255)
+                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                hl.FillTransparency = 0.5
+                hl.OutlineTransparency = 0
+                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                hl.Parent = char
+            end
+        else
+            if hl then hl:Destroy() end
+        end
+    end
+end
+
+plrs.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(function(char)
+        if not toggles.PlayerESP then return end
+        task.wait(0.5)
+        local hl = Instance.new("Highlight")
+        hl.Name = "PlayerHighlight"
+        hl.FillColor = Color3.fromRGB(0, 120, 255)
+        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+        hl.FillTransparency = 0.5
+        hl.OutlineTransparency = 0
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.Parent = char
+    end)
+end)
+
+local lastPlayerESP = false
+rs.Heartbeat:Connect(function()
+    if toggles.PlayerESP ~= lastPlayerESP then
+        lastPlayerESP = toggles.PlayerESP
+        applyPlayerESP(toggles.PlayerESP)
+    end
+end)
 
 -- Crosshair
 local crossX = Drawing.new("Line")
@@ -322,6 +396,7 @@ local function refreshTargets()
 
     for _, obj in ipairs(ws:GetChildren()) do
         if not obj:IsA("Model") then continue end
+        if plrs:GetPlayerFromCharacter(obj) then continue end
 
         local root = obj.PrimaryPart or obj:FindFirstChild("HumanoidRootPart")
         local objPos = root and root.Position
@@ -563,34 +638,40 @@ task.spawn(function()
     end
 end)
 
--- Always-on: Low Visuals
-lighting.GlobalShadows = false
-for _, v in ipairs(lighting:GetChildren()) do
-    if v:IsA("BlurEffect") or v:IsA("BloomEffect") or v:IsA("SunRaysEffect") then
-        v.Enabled = false
+-- Low Visuals
+local lastLowVisuals = false
+local function applyLowVisuals(state)
+    lighting.GlobalShadows = not state
+    for _, v in ipairs(lighting:GetChildren()) do
+        if v:IsA("BlurEffect") or v:IsA("BloomEffect") or v:IsA("SunRaysEffect") then
+            v.Enabled = not state
+        end
     end
 end
 
--- Always-on: Particle Cap
-task.spawn(function()
-    while true do
-        task.wait(5)
-        for _, v in ipairs(ws:GetDescendants()) do
-            if v:IsA("ParticleEmitter") then
-                v.Rate = math.min(v.Rate, 5)
-            end
-        end
+rs.Heartbeat:Connect(function()
+    if toggles.LowVisuals ~= lastLowVisuals then
+        lastLowVisuals = toggles.LowVisuals
+        applyLowVisuals(toggles.LowVisuals)
     end
 end)
 
--- Always-on: Instance Optimizer
+-- Instance Optimizer
 task.spawn(function()
     while true do
         task.wait(5)
+        if not toggles.InstanceOptimizer then continue end
         local i = 0
         for _, v in ipairs(ws:GetDescendants()) do
             if v:IsA("MeshPart") or v:IsA("UnionOperation") then
                 v.RenderFidelity = Enum.RenderFidelity.Performance
+                local isDebris = not v.Anchored
+                    and v.Size.Magnitude < 4
+                    and not v.Parent:FindFirstChildOfClass("Humanoid")
+                    and not plrs:GetPlayerFromCharacter(v.Parent)
+                if isDebris then
+                    v.CollisionFidelity = Enum.CollisionFidelity.Box
+                end
             end
             if v:IsA("BasePart") and not v.Anchored then
                 local sz = v.Size
@@ -602,6 +683,33 @@ task.spawn(function()
             i += 1
             if i % 100 == 0 then task.wait() end
         end
+    end
+end)
+
+-- Particle Cap
+local cachedRates = {}
+
+local function applyParticleCap(state)
+    for _, v in ipairs(ws:GetDescendants()) do
+        if v:IsA("ParticleEmitter") then
+            if state then
+                cachedRates[v] = v.Rate
+                v.Rate = 5
+            else
+                if cachedRates[v] then
+                    v.Rate = cachedRates[v]
+                    cachedRates[v] = nil
+                end
+            end
+        end
+    end
+end
+
+local lastParticleCap = false
+rs.Heartbeat:Connect(function()
+    if toggles.ParticleCap ~= lastParticleCap then
+        lastParticleCap = toggles.ParticleCap
+        applyParticleCap(toggles.ParticleCap)
     end
 end)
 
@@ -646,6 +754,9 @@ uis.InputBegan:Connect(function(input, gpe)
             i += 1
             if i % 50 == 0 then task.wait() end
         end
+        applyParticleCap(true)
+        lastParticleCap = true
+        toggles.ParticleCap = true
         print("Deep Clean done, removed " .. cleaned .. " parts")
     end
 end)
